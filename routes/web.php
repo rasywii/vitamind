@@ -9,7 +9,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\PaginaController;
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('tienda.index');
 });
 
 Route::get('/tienda', [TiendaController::class, 'index'])->name('tienda.index');
