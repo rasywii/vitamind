@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: vitamind
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /up
+    envVars:
+      # Genera la clave con:  php artisan key:generate --show
+      # y pegala en el dashboard de Render (es secreta, por eso sync:false).
+      - key: APP_KEY
+        sync: false
+      # La URL publica de tu sitio (la sabras tras el primer deploy).
+      - key: APP_URL
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
