@@ -6,8 +6,10 @@ use App\Models\Cliente;
 use App\Models\Pedido;
 use App\Models\PedidoItem;
 use App\Models\Producto;
+use App\Services\OdooService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CheckoutController extends Controller
 {
@@ -104,6 +106,21 @@ class CheckoutController extends Controller
 
         // 5) Vaciamos el carrito
         session()->forget('carrito');
+
+        // 6) INTEGRACION CON ODOO -> enviamos el cliente al CRM.
+        // Va fuera de la transaccion y protegido: si Odoo falla o aun no esta
+        // configurado, la compra ya quedo guardada y el cliente no ve un error.
+        try {
+            $pedido->load('cliente');
+            app(OdooService::class)->sincronizarCliente(
+                $pedido->cliente->nombre,
+                $pedido->cliente->email,
+                $pedido->cliente->telefono,
+                $pedido->cliente->direccion
+            );
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo sincronizar el cliente con Odoo: ' . $e->getMessage());
+        }
 
         return redirect()->route('checkout.confirmacion', $pedido);
     }
