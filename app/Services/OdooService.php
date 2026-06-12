@@ -157,29 +157,34 @@ class OdooService
     {
         $code = 'WEB-' . $producto->id;
 
+        // Los productos fisicos llevan inventario (almacenables); los digitales
+        // (guias/recetarios) son "servicios" en Odoo: se venden sin stock.
+        $fisico = $producto->tipo === 'fisico';
+
+        // Campos comunes (catalogo + tipo). El tipo lo refrescamos siempre,
+        // asi un producto mal clasificado antes queda corregido.
+        $vals = [
+            'name'        => $producto->nombre,
+            'list_price'  => (float) $producto->precio,
+            'type'        => $fisico ? 'consu' : 'service',
+            'is_storable' => $fisico,
+        ];
+
         $existentes = $this->exec('product.template', 'search', [[['default_code', '=', $code]]], ['limit' => 1]);
 
         if (! empty($existentes)) {
-            // Ya existe: actualizamos catalogo (nombre/precio) pero NO el stock,
+            // Ya existe: actualizamos catalogo y tipo, pero NO el stock,
             // porque el inventario lo gestiona Odoo a partir de ahora.
             $tmplId = (int) $existentes[0];
-            $this->exec('product.template', 'write', [[$tmplId], [
-                'name'       => $producto->nombre,
-                'list_price' => (float) $producto->precio,
-            ]]);
+            $this->exec('product.template', 'write', [[$tmplId], $vals]);
         } else {
-            // No existe: lo creamos como producto almacenable y cargamos
-            // su stock inicial desde el valor actual de la tienda.
-            $tmplId = (int) $this->exec('product.template', 'create', [[
-                'name'        => $producto->nombre,
-                'list_price'  => (float) $producto->precio,
-                'default_code' => $code,
-                'type'        => 'consu',
-                'is_storable' => true,
-            ]]);
+            // No existe: lo creamos. Si es fisico, cargamos su stock inicial.
+            $tmplId = (int) $this->exec('product.template', 'create', [$vals + ['default_code' => $code]]);
 
             $variantNuevo = $this->variantId($tmplId);
-            $this->ponerStockInicial($variantNuevo, max((int) $producto->stock, 0));
+            if ($fisico) {
+                $this->ponerStockInicial($variantNuevo, max((int) $producto->stock, 0));
+            }
 
             $this->guardarOdooId($producto, $variantNuevo);
             return $variantNuevo;
