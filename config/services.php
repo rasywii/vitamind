@@ -45,4 +45,8 @@ return [
     'username' => env('ODOO_USERNAME'),
     'password' => env('ODOO_PASSWORD'),
     ],
+
+    'brevo' => [
+        'key' => env('BREVO_API_KEY'),
+    ],
 ];
