@@ -10,7 +10,7 @@ class Producto extends Model
 {
     protected $fillable = [
         'categoria_id', 'nombre', 'descripcion', 'tipo', 'precio',
-        'stock', 'controla_stock', 'archivo_url', 'imagen', 'activo',
+        'stock', 'controla_stock', 'archivo_url', 'imagen', 'odoo_id', 'activo',
     ];
 
     protected $casts = [

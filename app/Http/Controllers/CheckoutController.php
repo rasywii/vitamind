@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use App\Models\Pedido;
 use App\Models\PedidoItem;
-use App\Models\Producto;
 use App\Services\OdooService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,14 +47,8 @@ class CheckoutController extends Controller
             return redirect()->route('carrito.ver');
         }
 
-        // Verificamos que haya stock suficiente de los productos fisicos
-        foreach ($carrito as $item) {
-            $producto = Producto::find($item['producto_id']);
-            if ($producto && $producto->controla_stock && $item['cantidad'] > $producto->stock) {
-                return redirect()->route('carrito.ver')
-                    ->with('exito', "No hay stock suficiente de {$producto->nombre}.");
-            }
-        }
+        // Nota: el inventario lo gestiona Odoo. La tienda ya no valida ni
+        // descuenta stock; eso ocurre al registrar la venta en Odoo (abajo).
 
         // Transaccion: o se completa todo, o no se guarda nada (evita pedidos a medias)
         $pedido = DB::transaction(function () use ($datos, $carrito) {
@@ -85,7 +78,7 @@ class CheckoutController extends Controller
                 'metodo_pago' => $datos['metodo_pago'],
             ]);
 
-            // 4) ITEMS + STOCK -> una linea por producto y descontamos inventario
+            // 4) ITEMS -> una linea por producto (el inventario lo lleva Odoo)
             foreach ($carrito as $item) {
                 PedidoItem::create([
                     'pedido_id'       => $pedido->id,
@@ -94,11 +87,6 @@ class CheckoutController extends Controller
                     'cantidad'        => $item['cantidad'],
                     'precio_unitario' => $item['precio'],
                 ]);
-
-                $producto = Producto::find($item['producto_id']);
-                if ($producto && $producto->controla_stock) {
-                    $producto->decrement('stock', $item['cantidad']);
-                }
             }
 
             return $pedido;
@@ -107,19 +95,13 @@ class CheckoutController extends Controller
         // 5) Vaciamos el carrito
         session()->forget('carrito');
 
-        // 6) INTEGRACION CON ODOO -> enviamos el cliente al CRM.
+        // 6) INTEGRACION CON ODOO -> cliente + pedido de venta + inventario.
         // Va fuera de la transaccion y protegido: si Odoo falla o aun no esta
         // configurado, la compra ya quedo guardada y el cliente no ve un error.
         try {
-            $pedido->load('cliente');
-            app(OdooService::class)->sincronizarCliente(
-                $pedido->cliente->nombre,
-                $pedido->cliente->email,
-                $pedido->cliente->telefono,
-                $pedido->cliente->direccion
-            );
+            app(OdooService::class)->registrarPedido($pedido);
         } catch (\Throwable $e) {
-            Log::warning('No se pudo sincronizar el cliente con Odoo: ' . $e->getMessage());
+            Log::warning('No se pudo sincronizar el pedido con Odoo: ' . $e->getMessage());
         }
 
         return redirect()->route('checkout.confirmacion', $pedido);
