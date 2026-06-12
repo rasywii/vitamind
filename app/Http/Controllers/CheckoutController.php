@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use App\Models\Pedido;
 use App\Models\PedidoItem;
+use App\Mail\PedidoConfirmado;
 use App\Services\OdooService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class CheckoutController extends Controller
 {
@@ -102,6 +104,15 @@ class CheckoutController extends Controller
             app(OdooService::class)->registrarPedido($pedido);
         } catch (\Throwable $e) {
             Log::warning('No se pudo sincronizar el pedido con Odoo: ' . $e->getMessage());
+        }
+
+        // 7) CORREO DE CONFIRMACION -> resumen + adjunta los PDF digitales.
+        // Tambien protegido: un fallo de correo no debe romper la compra.
+        try {
+            $pedido->load('cliente', 'items.producto');
+            Mail::to($pedido->cliente->email)->send(new PedidoConfirmado($pedido));
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo enviar el correo de confirmacion: ' . $e->getMessage());
         }
 
         return redirect()->route('checkout.confirmacion', $pedido);
